@@ -10,18 +10,24 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigInteger;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.security.GeneralSecurityException;
+import java.security.InvalidKeyException;
 import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.KeyStore;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
+import java.security.SignatureException;
 import java.security.cert.CertStore;
 import java.security.cert.Certificate;
+import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.security.spec.EncodedKeySpec;
@@ -39,12 +45,20 @@ import org.bouncycastle.asn1.cms.IssuerAndSerialNumber;
 import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
 import org.bouncycastle.asn1.pkcs.Attribute;
 import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
+import org.bouncycastle.asn1.x509.X509CertificateStructure;
 import org.bouncycastle.cert.X509CertificateHolder;
+import org.bouncycastle.cert.X509v3CertificateBuilder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cert.jcajce.JcaX509v1CertificateBuilder;
+import org.bouncycastle.crypto.params.AsymmetricKeyParameter;
+import org.bouncycastle.crypto.util.PrivateKeyFactory;
 import org.bouncycastle.operator.ContentSigner;
+import org.bouncycastle.operator.DefaultDigestAlgorithmIdentifierFinder;
+import org.bouncycastle.operator.DefaultSignatureAlgorithmIdentifierFinder;
 import org.bouncycastle.operator.OperatorCreationException;
+import org.bouncycastle.operator.bc.BcRSAContentSignerBuilder;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.bouncycastle.pkcs.PKCS10CertificationRequest;
 import org.bouncycastle.pkcs.PKCS10CertificationRequestBuilder;
@@ -274,6 +288,51 @@ public class ScepServletTest {
     	KeyPair keyPair = new KeyPair(publicKey,privateKey);
     	return keyPair;
     }
+    public static X509Certificate sign(PKCS10CertificationRequest inputCSR, PrivateKey caPrivate, PublicKey caPublic)
+            throws InvalidKeyException, NoSuchAlgorithmException,
+            NoSuchProviderException, SignatureException, IOException,
+            OperatorCreationException, CertificateException {   
+
+        AlgorithmIdentifier sigAlgId = new DefaultSignatureAlgorithmIdentifierFinder()
+                .find("SHA1withRSA");
+        AlgorithmIdentifier digAlgId = new DefaultDigestAlgorithmIdentifierFinder()
+                .find(sigAlgId);
+
+        AsymmetricKeyParameter foo = PrivateKeyFactory.createKey(caPrivate
+                .getEncoded());
+        SubjectPublicKeyInfo keyInfo = SubjectPublicKeyInfo.getInstance(caPublic.getEncoded());
+
+        PKCS10CertificationRequest pk10Holder = inputCSR;
+        X509v3CertificateBuilder myCertificateGenerator = new X509v3CertificateBuilder(
+                new X500Name("CN=rguioscert.labs.microstrategy.com"), new BigInteger("1"), new Date(
+                        System.currentTimeMillis()), new Date(
+                        System.currentTimeMillis() + 30 * 365 * 24 * 60 * 60
+                                * 1000), pk10Holder.getSubject(), keyInfo);
+
+        ContentSigner sigGen = new BcRSAContentSignerBuilder(sigAlgId, digAlgId)
+                .build(foo);        
+
+        X509CertificateHolder holder = myCertificateGenerator.build(sigGen);
+        org.bouncycastle.asn1.x509.Certificate eeX509CertificateStructure = holder
+                .toASN1Structure(); 
+
+        CertificateFactory cf = CertificateFactory.getInstance("X.509");
+
+        // Read Certificate
+        InputStream is1 = new ByteArrayInputStream(eeX509CertificateStructure.getEncoded());
+        X509Certificate theCert = (X509Certificate) cf.generateCertificate(is1);
+        is1.close();
+        return theCert;
+        //return null;
+    }
+    private void writeCertificate(Certificate cert,String filename) throws Exception
+    {
+    	final FileOutputStream os = new FileOutputStream(filename);  
+    	os.write("-----BEGIN CERTIFICATE-----\n".getBytes("US-ASCII"));  
+    	os.write(Base64.encodeBase64(cert.getEncoded(), true));  
+    	os.write("-----END CERTIFICATE-----\n".getBytes("US-ASCII"));  
+    	os.close(); 
+    }
     @Test
     public void testEnroll2() throws Exception {
     	FileReader fileReader = new FileReader("src/test/resources/client.csr");
@@ -304,11 +363,8 @@ public class ScepServletTest {
     	assertThat(s, is(State.CERT_ISSUED));
     	Collection<? extends Certificate> cs= t.getCertStore().getCertificates(null);
     	Certificate cert = cs.iterator().next();
-    	final FileOutputStream os = new FileOutputStream("src/test/resources/clientFromCA(jscep).der");  
-    	os.write("-----BEGIN CERTIFICATE-----\n".getBytes("US-ASCII"));  
-    	os.write(Base64.encodeBase64(cert.getEncoded(), true));  
-    	os.write("-----END CERTIFICATE-----\n".getBytes("US-ASCII"));  
-    	os.close(); 
+    	writeCertificate(cert,"src/test/resources/clientFromCA(jscep).der");
+    	writeCertificate(sign(csr,priKey,pubKey),"src/test/resources/clientFromCA2.der");
     }
     
     @Test
