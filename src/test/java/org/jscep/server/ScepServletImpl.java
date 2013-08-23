@@ -65,7 +65,7 @@ public class ScepServletImpl extends ScepServlet {
 
     @Override
     public void init() throws ServletException {
-        name = new X500Name("CN=Certification Authority");
+        name = new X500Name("CN=rguioscert.labs.microstrategy.com");
         pollName = new X500Name("CN=Poll");
         caSerial = BigInteger.TEN;
         try {
@@ -116,11 +116,11 @@ public class ScepServletImpl extends ScepServlet {
             if (subject.equals(pollName)) {
                 return Collections.emptyList();
             }
-            String password = getPassword(csr);
-            if (!password.equals("password")) {
-                LOGGER.debug("Invalid password");
-                throw new OperationFailureException(FailInfo.badRequest);
-            }
+//            String password = getPassword(csr);
+//            if (!password.equals("password")) {
+//                LOGGER.debug("Invalid password");
+//                throw new OperationFailureException(FailInfo.badRequest);
+//            }
             PublicKey pubKey = CertificationRequestUtils.getPublicKey(csr);
             X509Certificate issued = generateCertificate(pubKey, subject, name,
                     getSerial());

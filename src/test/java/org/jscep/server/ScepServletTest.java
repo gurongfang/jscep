@@ -3,26 +3,39 @@ package org.jscep.server;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertThat;
 
+import java.io.DataInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.security.GeneralSecurityException;
+import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.KeyStore;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.cert.CertStore;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
+import java.security.spec.EncodedKeySpec;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.Calendar;
 import java.util.Collection;
 import java.util.Date;
+import java.util.Enumeration;
 import java.util.GregorianCalendar;
 
+import org.apache.commons.codec.binary.Base64;
 import org.bouncycastle.asn1.DERPrintableString;
 import org.bouncycastle.asn1.cms.IssuerAndSerialNumber;
 import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
+import org.bouncycastle.asn1.pkcs.Attribute;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.cert.X509CertificateHolder;
@@ -33,9 +46,11 @@ import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.bouncycastle.pkcs.PKCS10CertificationRequest;
 import org.bouncycastle.pkcs.PKCS10CertificationRequestBuilder;
+import org.bouncycastle.util.io.pem.PemReader;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.servlet.ServletHandler;
 import org.jscep.asn1.IssuerAndSubject;
+import org.jscep.client.EnrollmentResponse;
 import org.jscep.message.PkcsPkiEnvelopeDecoder;
 import org.jscep.message.PkcsPkiEnvelopeEncoder;
 import org.jscep.message.PkiMessageDecoder;
@@ -76,12 +91,13 @@ public class ScepServletTest {
 
     @Before
     public void configureFixtures() throws Exception {
-        name = new X500Name("CN=Example");
+        name = new X500Name("CN=rguioscert.labs.microstrategy.com");
         pollName = new X500Name("CN=Poll");
         goodSerial = BigInteger.ONE;
         badSerial = BigInteger.ZERO;
         goodIdentifier = null;
         badIdentifier = "bad";
+        //KeyPair keyPair = readPublicAndPrivateKey();
         KeyPair keyPair = KeyPairGenerator.getInstance("RSA").genKeyPair();
         priKey = keyPair.getPrivate();
         pubKey = keyPair.getPublic();
@@ -215,7 +231,63 @@ public class ScepServletTest {
 
         assertThat(s, is(State.CERT_NON_EXISTANT));
     }
+    private EncodedKeySpec generateSpec(String filename,boolean isPublic) throws Exception
+    {
 
+    	File f = new File(filename);
+    	FileInputStream fis = new FileInputStream(f);
+    	DataInputStream dis = new DataInputStream(fis);
+    	byte[] keyBytes = new byte[(int)f.length()];
+    	dis.readFully(keyBytes);
+    	dis.close();
+    	if(isPublic)
+    		return new X509EncodedKeySpec(keyBytes);
+    	else
+    		return new PKCS8EncodedKeySpec(keyBytes);
+    }
+    private KeyPair readPublicAndPrivateKey() throws Exception
+    {
+    	KeyFactory kf = KeyFactory.getInstance("RSA");
+    	PrivateKey privateKey =  kf.generatePrivate(generateSpec("src/test/resources/private_key.der",false));
+    	PublicKey publicKey =  kf.generatePublic(generateSpec("src/test/resources/public_key.der",true));
+    	KeyPair keyPair = new KeyPair(publicKey,privateKey);
+    	return keyPair;
+    }
+    @Test
+    public void testEnroll2() throws Exception {
+    	FileReader fileReader = new FileReader("src/test/resources/client.csr");
+    	PemReader pemReader = new PemReader(fileReader);
+    	PKCS10CertificationRequest csr = new PKCS10CertificationRequest(pemReader.readPemObject().getContent());
+    	fileReader.close();
+    	pemReader.close();
+    	
+
+    	    
+    	PkcsPkiEnvelopeEncoder envEncoder = new PkcsPkiEnvelopeEncoder(
+    			getRecipient(), "DESede");
+    	PkiMessageEncoder encoder = new PkiMessageEncoder(priKey, sender,
+    			envEncoder);
+
+    	PkcsPkiEnvelopeDecoder envDecoder = new PkcsPkiEnvelopeDecoder(sender,
+    			priKey);
+    	PkiMessageDecoder decoder = new PkiMessageDecoder(getRecipient(),
+    			envDecoder);
+
+    	Transport transport = getTransport(getURL());
+    	Transaction t = new EnrollmentTransaction(transport, encoder, decoder,
+    			csr);
+
+    	State s = t.send();
+    	assertThat(s, is(State.CERT_ISSUED));
+    	Collection<? extends Certificate> cs= t.getCertStore().getCertificates(null);
+    	Certificate cert = cs.iterator().next();
+    	final FileOutputStream os = new FileOutputStream("src/test/resources/clientFromCA(jscep).der");  
+    	os.write("-----BEGIN CERTIFICATE-----\n".getBytes("US-ASCII"));  
+    	os.write(Base64.encodeBase64(cert.getEncoded(), true));  
+    	os.write("-----END CERTIFICATE-----\n".getBytes("US-ASCII"));  
+    	os.close(); 
+    }
+    
     @Test
     public void testEnrollmentGet() throws Exception {
         PKCS10CertificationRequest csr = getCsr(name, pubKey, priKey,
