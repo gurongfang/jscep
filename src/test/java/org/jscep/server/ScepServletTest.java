@@ -3,6 +3,7 @@ package org.jscep.server;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertThat;
 
+import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -21,6 +22,7 @@ import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.cert.CertStore;
 import java.security.cert.Certificate;
+import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.security.spec.EncodedKeySpec;
 import java.security.spec.PKCS8EncodedKeySpec;
@@ -97,15 +99,15 @@ public class ScepServletTest {
         badSerial = BigInteger.ZERO;
         goodIdentifier = null;
         badIdentifier = "bad";
-        //KeyPair keyPair = readPublicAndPrivateKey();
-        KeyPair keyPair = KeyPairGenerator.getInstance("RSA").genKeyPair();
+        KeyPair keyPair = readPublicAndPrivateKey();
+        //KeyPair keyPair = KeyPairGenerator.getInstance("RSA").genKeyPair();
         priKey = keyPair.getPrivate();
         pubKey = keyPair.getPublic();
-        sender = generateCertificate();
+        sender = readCertificate();
+        //sender = generateCertificate();
         transportFactory = new UrlConnectionTransportFactory();
 
     }
-
     private X509Certificate generateCertificate() throws Exception {
         ContentSigner signer;
         try {
@@ -245,6 +247,25 @@ public class ScepServletTest {
     	else
     		return new PKCS8EncodedKeySpec(keyBytes);
     }
+
+    private X509Certificate readCertificate() throws Exception {
+    	 FileInputStream fis = null;
+    	 ByteArrayInputStream bais = null;
+    	  // use FileInputStream to read the file
+    	  fis = new FileInputStream("src/test/resources/CRootCA.der");
+    	  
+    	  // read the bytes
+    	  byte value[] = new byte[fis.available()];
+    	  fis.read(value);
+    	  fis.close();
+    	  bais = new ByteArrayInputStream(value);
+    	  
+    	  // get X509 certificate factory
+    	  CertificateFactory certFactory = CertificateFactory.getInstance("X.509");
+    	   
+    	  // certificate factory can now create the certificate 
+    	  return (X509Certificate)certFactory.generateCertificate(bais);
+    }
     private KeyPair readPublicAndPrivateKey() throws Exception
     {
     	KeyFactory kf = KeyFactory.getInstance("RSA");
@@ -267,7 +288,9 @@ public class ScepServletTest {
     			getRecipient(), "DESede");
     	PkiMessageEncoder encoder = new PkiMessageEncoder(priKey, sender,
     			envEncoder);
-
+    	System.out.println("============================================================================================================");
+    	System.out.println(getRecipient());
+    	System.out.println("============================================================================================================");
     	PkcsPkiEnvelopeDecoder envDecoder = new PkcsPkiEnvelopeDecoder(sender,
     			priKey);
     	PkiMessageDecoder decoder = new PkiMessageDecoder(getRecipient(),
