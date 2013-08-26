@@ -141,7 +141,7 @@ public static X509Certificate[] buildChain() throws Exception {
     certGen.setSerialNumber(BigInteger.valueOf(System.currentTimeMillis()));
     certGen.setIssuerDN(rootCert.getSubjectX500Principal());
     certGen.setNotBefore(new Date(System.currentTimeMillis()));
-    certGen.setNotAfter(new Date(System.currentTimeMillis() + 10000));
+    certGen.setNotAfter(new Date(System.currentTimeMillis() + 24*3600*1000));
     X500Principal              dnName = new X500Principal("CN=10.197.41.74");
     certGen.setSubjectDN(dnName);
     //certGen.setSubjectDN(request.getCertificationRequestInfo().getSubject());
@@ -160,8 +160,7 @@ public static X509Certificate[] buildChain() throws Exception {
     certGen.addExtension(X509Extensions.KeyUsage, true, new KeyUsage(KeyUsage.digitalSignature
         | KeyUsage.keyEncipherment));
 
-    certGen.addExtension(X509Extensions.ExtendedKeyUsage, true, new ExtendedKeyUsage(
-        KeyPurposeId.id_kp_serverAuth));
+    certGen.addExtension(X509Extensions.ExtendedKeyUsage, true, new ExtendedKeyUsage(KeyPurposeId.anyExtendedKeyUsage));
 
     ASN1Set attributes = request.getCertificationRequestInfo().getAttributes();
 
