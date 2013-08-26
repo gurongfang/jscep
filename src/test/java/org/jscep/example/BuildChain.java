@@ -32,6 +32,7 @@ import org.apache.commons.codec.binary.Base64;
 import org.bouncycastle.asn1.ASN1Set;
 import org.bouncycastle.asn1.DERObjectIdentifier;
 import org.bouncycastle.asn1.pkcs.Attribute;
+import org.bouncycastle.asn1.pkcs.CertificationRequestInfo;
 import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
 import org.bouncycastle.asn1.x509.BasicConstraints;
 import org.bouncycastle.asn1.x509.ExtendedKeyUsage;
@@ -73,7 +74,7 @@ public static X509Certificate generateV1Certificate(KeyPair pair) throws Invalid
     certGen.setNotAfter(new Date(System.currentTimeMillis() + 10000));
     certGen.setSubjectDN(new X500Principal("CN=Test Certificate"));
     certGen.setPublicKey(pair.getPublic());
-    certGen.setSignatureAlgorithm("SHA256WithRSAEncryption");
+    certGen.setSignatureAlgorithm("MD5WithRSAEncryption");
 
     return certGen.generateX509Certificate(pair.getPrivate(), "BC");
   }
@@ -142,11 +143,13 @@ public static X509Certificate[] buildChain() throws Exception {
     certGen.setIssuerDN(rootCert.getSubjectX500Principal());
     certGen.setNotBefore(new Date(System.currentTimeMillis()));
     certGen.setNotAfter(new Date(System.currentTimeMillis() + 24*3600*1000));
-    X500Principal              dnName = new X500Principal("CN=10.197.41.74");
+    //X500Principal              dnName = new X500Principal("CN=10.197.41.74");
+    //X500Principal              dnName = new X500Principal(request.getCertificationRequestInfo().getSubject().toString());
+    X500Principal dnName = new X500Principal("C=US,ST=Virginia,L=Vienna,O=MicroStrategy,CN=10.197.41.74");
     certGen.setSubjectDN(dnName);
     //certGen.setSubjectDN(request.getCertificationRequestInfo().getSubject());
     certGen.setPublicKey(request.getPublicKey("BC"));
-    certGen.setSignatureAlgorithm("SHA256WithRSAEncryption");
+    certGen.setSignatureAlgorithm("MD5withRSA");
 
     certGen.addExtension(X509Extensions.AuthorityKeyIdentifier, false,
         new AuthorityKeyIdentifierStructure(rootCert));
@@ -157,8 +160,8 @@ public static X509Certificate[] buildChain() throws Exception {
 
     certGen.addExtension(X509Extensions.BasicConstraints, true, new BasicConstraints(false));
 
-    certGen.addExtension(X509Extensions.KeyUsage, true, new KeyUsage(KeyUsage.digitalSignature
-        | KeyUsage.keyEncipherment));
+//    certGen.addExtension(X509Extensions.KeyUsage, true, new KeyUsage(KeyUsage.digitalSignature
+//        | KeyUsage.keyEncipherment));
 
     certGen.addExtension(X509Extensions.ExtendedKeyUsage, true, new ExtendedKeyUsage(KeyPurposeId.anyExtendedKeyUsage));
 
